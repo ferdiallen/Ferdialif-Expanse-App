@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Ferdialif Expense Management</string>
+    <string name="no_transfer_list">No Transfer list</string>
+    <string name="income">Income</string>
+    <string name="ferdialif_balance_title">Ferdialif's current balance</string>
+    <string name="select_category_hint">Select Category</string>
+    <string name="category">Category</string>
+    <string name="outcome">Outcome</string>
+    <string name="expense_title">Add Expense</string>
+    <string name="amount">Amount</string>
+    <string name="ok">OK</string>
+</resources>

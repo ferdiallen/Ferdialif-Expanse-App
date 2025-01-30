@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ferdialif Counter Money</title>
+    <link type="text/css" rel="stylesheet" href="styles.css">
+</head>
+
+<script
+        src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs"
+        type="module"
+></script>
+<body>
+<div id="loader">
+    <div class="lottie-extension">
+        <dotlottie-player
+                src="https://lottie.host/3e266951-4dca-4cb7-a599-060573f64176/4A8iCGvdU2.lottie"
+                background="transparent"
+                speed="1"
+                style="width: 100px; height: 100px"
+                loop
+                autoplay
+        ></dotlottie-player>
+    </div>
+
+</div>
+<div id="app"></div>
+</body>
+<script>
+    function appHasLoaded(){
+        const loader = document.getElementById("loader");
+        const app = document.getElementById("app");
+        loader.style.display = "none";
+        console.log("App Loaded");
+    }
+</script>
+<footer>
+    <script type="application/javascript" src="composeApp.js"></script>
+</footer>
+</html>
