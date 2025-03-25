@@ -16,5 +16,5 @@ fun retrieveCurrentDate(): String {
             }else {
                 char
            }
-        }.joinToString("")}, ${ date.year } at ${ result.hour }:${ result.minute }"
+        }.joinToString("")}, ${ date.year } at ${ result.hour }:${ if(result.minute >= 10) result.minute else "0${result.minute}" }"
     }

@@ -1,27 +1,32 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.reload.ComposeHotRun
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
-import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
+
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.hotReload)
+    id("org.openjfx.javafxplugin") version "0.1.0"
 }
 
 kotlin {
-    jvm("desktop")
+    jvm("desktop"){
+        withJava()
+    }
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         moduleName = "composeApp"
         browser {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
-            commonWebpackConfig {
-
-            }
         }
         binaries.executable()
+    }
+
+    tasks.register<ComposeHotRun>("runHot") {
+        mainClass.set("org.ferdi.money.MainKt")
     }
 
     sourceSets {
@@ -32,7 +37,6 @@ kotlin {
             implementation(compose.material3)
             implementation(compose.ui)
             implementation(compose.components.resources)
-            implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtime.compose)
             implementation(compose.materialIconsExtended)
@@ -45,7 +49,7 @@ kotlin {
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
-            implementation(compose.components.uiToolingPreview)
+            implementation(compose.material3)
         }
     }
 }
@@ -53,10 +57,21 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "org.ferdi.money.MainKt"
-
+        jvmArgs("--add-opens", "java.desktop/sun.awt=ALL-UNNAMED")
+        jvmArgs("--add-opens", "java.desktop/java.awt.peer=ALL-UNNAMED") // recommended but not necessary
+        buildTypes.release.proguard {
+            obfuscate.set(true)
+            optimize.set(true)
+            version.set("7.5.0")
+            configurationFiles.from(project.file("proguard.pro"))
+        }
+        if (System.getProperty("os.name").contains("Mac")) {
+            jvmArgs("--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED")
+            jvmArgs("--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED")
+        }
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "org.ferdi.money"
+            packageName = "Ferdialif Counter Money"
             packageVersion = "1.0.0"
         }
     }

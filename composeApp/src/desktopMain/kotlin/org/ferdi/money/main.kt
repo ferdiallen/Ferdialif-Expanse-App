@@ -2,8 +2,12 @@ package org.ferdi.money
 
 import App
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
@@ -21,12 +25,14 @@ fun main() = application {
         title = stringResource(Res.string.app_name),
         state = rememberWindowState(
             placement = WindowPlacement.Floating,
-            position = WindowPosition(Alignment.TopEnd)
+            position = WindowPosition(Alignment.TopEnd),
+            width = 360.dp,
+            height = 700.dp
         ),
         alwaysOnTop = true
     ) {
-        DevelopmentEntryPoint{
-           App(modifier = Modifier.fillMaxSize())
+        DevelopmentEntryPoint {
+            App(modifier = Modifier.fillMaxSize())
         }
     }
 }

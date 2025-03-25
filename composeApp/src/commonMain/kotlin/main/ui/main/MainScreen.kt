@@ -3,6 +3,7 @@ package main.ui.main
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -33,15 +34,16 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.input.OutputTransformation
-import androidx.compose.foundation.text.input.delete
-import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Money
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,28 +55,33 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
@@ -99,22 +106,26 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import main.core.font.poppinsFont
-import main.core.util.PlatformIdentifier
+import main.core.ui.NumberTextField
+import main.core.ui.ToastPopup
+import main.core.ui.ToastPopupData
+import main.core.ui.rememberMoneyPopup
 import main.core.util.TransferCategory
+import main.core.util.TransformDataMoney
 import main.core.util.currencyResult
 import main.core.util.listCategory
-import main.core.util.platformIdentifier
 import main.core.util.retrieveCurrentDate
 import main.data.local.IncomeModel
+import main.ui.GreenTealColor
 import org.jetbrains.compose.resources.stringResource
 import org.kodein.emoji.Emoji
 import org.kodein.emoji.compose.WithPlatformEmoji
+import org.kodein.emoji.compose.m3.TextWithNotoAnimatedEmoji
 import org.kodein.emoji.compose.m3.TextWithPlatformEmoji
-import org.kodein.emoji.mediumLight
+import org.kodein.emoji.light
 import org.kodein.emoji.people_body.hand_fingers_open.WavingHand
 import kotlin.random.Random
 
@@ -125,6 +136,13 @@ class MainScreenViewModel : ViewModel() {
     private val _definedTransferLimit = MutableStateFlow(0L)
     val definedTransferLimit = _definedTransferLimit.asStateFlow()
 
+    private val _definedMaxTransferLimit = MutableStateFlow(0L)
+    val definedMaxTransferLimit = _definedMaxTransferLimit.asStateFlow()
+
+
+    fun updateMaxTransferLimitData(data: Long) = _definedMaxTransferLimit.update {
+        data
+    }
 
     fun insertTransferData(data: IncomeModel) {
         _currentTransferData.update {
@@ -154,20 +172,22 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
         mutableStateOf(false)
     }
     LaunchedEffect(Unit) {
-        delay(1000L)
-        viewModel.addDataTransferLimit(9000L)
+        delay(2000L)
+        viewModel.addDataTransferLimit(0L)
         shouldHideUi = true
     }
     val currentTransferData by viewModel.currentTransferData.collectAsStateWithLifecycle()
     var shouldShowUpdateAccountDialog by remember {
         mutableStateOf(false)
     }
+    val animateBlurValue by animateDpAsState(if (shouldShowUpdateAccountDialog) 10.dp else 0.dp)
     val transferLimit by viewModel.definedTransferLimit.collectAsStateWithLifecycle()
-    val remainingTransferLimit = remember(transferLimit) {
-        (transferLimit / 50000F)
+    val maxTransferLimit by viewModel.definedMaxTransferLimit.collectAsStateWithLifecycle()
+    val remainingTransferLimit = remember(transferLimit, maxTransferLimit) {
+        (transferLimit.toDouble() / maxTransferLimit.toDouble())
     }
     val animateCurrentProgress by animateFloatAsState(
-        remainingTransferLimit, tween(400)
+        if (remainingTransferLimit.isNaN()) 0F else remainingTransferLimit.toFloat(), tween(400)
     )
     var currentBalance by remember {
         mutableLongStateOf(0)
@@ -188,22 +208,36 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
             it.incomeValue
         }
     }
+    val data = rememberMoneyPopup()
     Scaffold(modifier, floatingActionButton = {
-        FloatingActionButton(onClick = {
-            shouldShowUpdateAccountDialog = true
-        }, containerColor = Color(0xFFE9C23E)) {
-            Row {
+        Column(horizontalAlignment = Alignment.End) {
+            SmallFloatingActionButton(
+                onClick = {},
+                containerColor = GreenTealColor
+            ) {
                 Icon(
-                    Icons.Filled.Add,
-                    contentDescription = "",
+                    Icons.Filled.AttachMoney, contentDescription = "",
                     tint = Color.White
                 )
-                Text("")
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            FloatingActionButton(onClick = {
+                shouldShowUpdateAccountDialog = true
+            }, containerColor = Color(0xFFE9C23E)) {
+                Row {
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = "",
+                        tint = Color.White
+                    )
+                    Text("")
+                }
             }
         }
     }) {
         Column(
-            Modifier.fillMaxSize().padding(top = 32.dp),
+            Modifier.fillMaxSize().blur(animateBlurValue)
+                .padding(top = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Card(
@@ -219,7 +253,11 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                     ) {
                         Card(
                             modifier = Modifier.size(30.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.5F)),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White.copy(
+                                    0.5F
+                                )
+                            ),
                             shape = CircleShape
                         ) {
 
@@ -227,12 +265,17 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                     }
 
                     Column(
-                        modifier = Modifier.fillMaxWidth(0.95F).padding(top = 54.dp, end = 64.dp),
+                        modifier = Modifier.fillMaxWidth(0.95F)
+                            .padding(top = 54.dp, end = 64.dp),
                         horizontalAlignment = Alignment.End
                     ) {
                         Card(
                             modifier = Modifier.size(40.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.5F)),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.White.copy(
+                                    0.5F
+                                )
+                            ),
                             shape = CircleShape
                         ) {
 
@@ -275,10 +318,14 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                 Icon(Icons.Filled.ArrowDropUp, tint = Color.Green, contentDescription = "")
                 Spacer(modifier = Modifier.width(2.dp))
                 Text(
-                    "${currencyResult(transferLimit)} | ${currencyResult(20_000L)} (${
-                        remainingTransferLimit.times(
-                            100
-                        )
+                    "${currencyResult(transferLimit)} | ${currencyResult(maxTransferLimit)} (${
+                        if (remainingTransferLimit.isNaN()) {
+                            0
+                        } else {
+                            remainingTransferLimit.times(
+                                100
+                            )
+                        }
                     }%)",
                     fontSize = 14.sp
                 )
@@ -340,22 +387,6 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                     item {
                         SelectionContainer {
                             Text(stringResource(Res.string.no_transfer_list), fontSize = 17.sp)
-                            var shouldShowText by remember {
-                                mutableStateOf(false)
-                            }
-                            LaunchedEffect(Unit){
-                                while (true){
-                                    delay(1000L)
-                                    shouldShowText = !shouldShowText
-                                }
-                            }
-                            if(shouldShowText){
-                                TextWithPlatformEmoji(
-                                    "Hi ${Emoji.WavingHand.mediumLight}",
-                                    fontSize = 45.sp,
-                                    color = Color.Yellow
-                                )
-                            }
                         }
                     }
                 } else {
@@ -393,7 +424,9 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                             it.type.name,
                                             fontSize = 20.sp,
                                             fontWeight = FontWeight.Light,
-                                            color = if (it.type == listCategory[0]) Color(0xFF47B86D)
+                                            color = if (it.type == listCategory[0]) Color(
+                                                0xFF47B86D
+                                            )
                                             else Color(0xFFBE4B4C),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -406,7 +439,9 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                                     ),
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Light,
-                                            color = if (it.type == listCategory[0]) Color(0xFF47B86D)
+                                            color = if (it.type == listCategory[0]) Color(
+                                                0xFF47B86D
+                                            )
                                             else Color(0xFFBE4B4C),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -440,10 +475,11 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                TextWithPlatformEmoji(
-                    "Hi ${Emoji.WavingHand.mediumLight}",
+                TextWithNotoAnimatedEmoji(
+                    "Welcome ${Emoji.WavingHand.light}",
                     fontSize = 45.sp,
-                    color = Color.White
+                    color = Color.White,
+                    fontFamily = poppinsFont()
                 )
             }
         }
@@ -456,6 +492,9 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
         ) {
+            var amountEntered = rememberSaveable {
+                mutableStateOf("")
+            }
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black.copy(0.4F))
                     .clickable(interactionSource = remember {
@@ -488,25 +527,6 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                         containerColor = Color.White
                     )
                 ) {
-                    val amountEntered = rememberTextFieldState("")
-                    val isNotNumber = remember(amountEntered.text) {
-                        snapshotFlow { amountEntered }
-                            .debounce(200)
-                            .mapLatest { result ->
-                                if (result.text == "") {
-                                    false
-                                } else {
-                                    result.text.all { !it.isDigit() }
-                                }
-                            }
-                    }.collectAsStateWithLifecycle(false)
-                    LaunchedEffect(isNotNumber.value) {
-                        if (isNotNumber.value) {
-                            amountEntered.edit {
-                                replace(0, originalText.length, "")
-                            }
-                        }
-                    }
                     var selectedCategory: TransferCategory? by remember {
                         mutableStateOf(null)
                     }
@@ -531,7 +551,6 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                 .padding(top = 32.dp, bottom = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            val focus = LocalSoftwareKeyboardController.current
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 stringResource(Res.string.amount),
@@ -542,57 +561,14 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                 modifier = Modifier.fillMaxWidth(0.9F),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFFEBF8F8))
                             ) {
-                                BasicTextField(
-                                    state = amountEntered,
-                                    enabled = platformIdentifier() == PlatformIdentifier.Desktop,
-                                    modifier = Modifier
-                                        .padding(vertical = 6.dp)
-                                        .fillMaxWidth(0.8F)
-                                        .height(35.dp),
-                                    lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.SingleLine,
-                                    decorator = {
-                                        Row(
-                                            modifier = Modifier
-                                                .padding(start = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.Center
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                if (amountEntered.text.isEmpty()) {
-                                                    Text(
-                                                        currencyResult(5000),
-                                                        fontSize = 16.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = Color.LightGray,
-                                                        modifier = Modifier.fillMaxSize()
-                                                            .padding(top = 6.dp)
-                                                    )
-                                                }
-                                                Row(modifier = Modifier.fillMaxWidth()) {
-                                                    it()
-                                                }
-
-                                            }
-                                        }
-                                    },
-                                    textStyle = TextStyle(
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    cursorBrush = SolidColor(Color.Black),
-                                    outputTransformation = OutputTransformation {
-                                        this.replace(
-                                            0,
-                                            this.length,
-                                            currencyResult(
-                                                amountEntered.text.toString().toLongOrNull()
-                                                    ?: return@OutputTransformation
-                                            )
-                                        )
-                                    },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                )
-
+                                NumberTextField(modifier = Modifier
+                                    .padding(vertical = 6.dp)
+                                    .fillMaxWidth(0.8F)
+                                    .height(35.dp), onUpdate = {
+                                        amountEntered.value = it
+                                }, amountEntered = {
+                                    amountEntered.value
+                                })
                             }
                             Spacer(modifier = Modifier.height(14.dp))
                             LazyColumn(modifier = Modifier.fillMaxWidth(0.9F)) {
@@ -602,12 +578,10 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                             items(it) { harga ->
                                                 Card(
                                                     onClick = {
-                                                        amountEntered.edit {
-                                                            if (this.originalText.isNotEmpty()) {
-                                                                this.delete(0, this.length)
-                                                            }
-                                                            append(harga.toString())
+                                                        if (amountEntered.value.isNotEmpty()) {
+                                                            amountEntered.value = ""
                                                         }
+                                                        amountEntered.value = harga.toString()
                                                     }, colors = CardDefaults.cardColors(
                                                         containerColor = Color(0xFF2FB8A7)
                                                     )
@@ -714,29 +688,41 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                             Spacer(modifier = Modifier.height(14.dp))
                             Button(
                                 onClick = {
+                                    if (selectedCategory == null) {
+                                        data.updateNewestData(
+                                            ToastPopupData(
+                                                message = "Category not selected",
+                                                icon = Icons.Filled.Warning,
+                                                duration = 2000L,
+                                                shouldShow = true
+                                            )
+                                        )
+
+                                    }
                                     currentBalance = try {
                                         selectedCategory?.let {
-                                        return@let if (currentBalance > 0 && (amountEntered.text.toString()
+                                            return@let if (currentBalance > 0 && (amountEntered.value.toString()
                                                     .takeIf { it != "" }?.toLong() ?: 0L) == 0L
                                             ) {
                                                 currentBalance
                                             } else {
-                                                val result = if (selectedCategory?.name == "Income") {
-                                                    currentBalance + (amountEntered.text.toString()
-                                                        .takeIf { it != "" }?.toLong()
-                                                        ?: 0L)
-                                                } else {
-                                                    currentBalance - (amountEntered.text.toString()
-                                                        .takeIf { it != "" }?.toLong()
-                                                        ?: 0L)
-                                                }
+                                                val result =
+                                                    if (selectedCategory?.name == "Income") {
+                                                        currentBalance + (amountEntered.value.toString()
+                                                            .takeIf { it != "" }?.toLong()
+                                                            ?: 0L)
+                                                    } else {
+                                                        currentBalance - (amountEntered.value.toString()
+                                                            .takeIf { it != "" }?.toLong()
+                                                            ?: 0L)
+                                                    }
                                                 result
                                             }
                                         } ?: return@Button
-                                    } catch (e: Exception) {
+                                    } catch (_: Exception) {
                                         currentBalance
                                     }
-                                    if ((amountEntered.text.toString()
+                                    if ((amountEntered.value.toString()
                                             .takeIf { it != "" }?.toLong() ?: 0) > 0
                                     ) {
                                         selectedCategory?.let {
@@ -744,7 +730,7 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                                 IncomeModel(
                                                     id = Random.nextInt(),
                                                     incomeName = "-",
-                                                    incomeValue = amountEntered.text.toString()
+                                                    incomeValue = amountEntered.value.toString()
                                                         .toLong(),
                                                     incomeDate = retrieveCurrentDate(),
                                                     type = it
@@ -752,7 +738,9 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
                                             )
                                             shouldShowUpdateAccountDialog = false
                                         }
+                                        return@Button
                                     }
+
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth(0.5F),
@@ -777,5 +765,6 @@ fun MainCalculationScreen(modifier: Modifier = Modifier) {
 
         }
     }
+    ToastPopup(modifier = Modifier.fillMaxSize(), state = data) {
+    }
 }
-
